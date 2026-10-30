@@ -32,4 +32,5 @@ Todavía no hay código ni arquitectura: se construye historia por historia desd
 ## Flujo de trabajo
 
 - `backlog.md` tiene el contexto y las historias. Se refinan una a una con `/story` y se implementan con `/pair` (skills en `.claude/skills/`).
+- `plan.md` tiene la historia en curso (el bloque aprobado por `/story`, que es la entrada de `/pair`). Es temporal: se reemplaza al pasar a la siguiente historia; no es documentación del proyecto.
 - Los detalles pendientes (qué pasa sin stock suficiente, devoluciones de turnos cerrados, cómo se reflejan en el cierre y en el dashboard) se deciden en `/story`, no por adelantado.
