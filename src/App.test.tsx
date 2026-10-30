@@ -3,11 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
-const { getSession, onAuthStateChange, signInWithPassword, select } = vi.hoisted(() => ({
+const { getSession, onAuthStateChange, signInWithPassword, select, insert } = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
   signInWithPassword: vi.fn(),
   select: vi.fn(),
+  insert: vi.fn(),
 }))
 
 vi.mock('./supabaseClient', () => ({
@@ -17,12 +18,26 @@ vi.mock('./supabaseClient', () => ({
       signInWithPassword,
       onAuthStateChange,
     },
-    from: vi.fn().mockReturnValue({ select }),
+    from: vi.fn().mockReturnValue({ select, insert }),
   },
 }))
 
 const sesionActiva = { data: { session: { user: { id: 'admin-1' } } } }
 const sinSesion = { data: { session: null } }
+
+async function rellenarProducto({
+  nombre = '',
+  precio = '',
+  stock = '',
+}: {
+  nombre?: string
+  precio?: string
+  stock?: string
+}) {
+  if (nombre) await userEvent.type(screen.getByLabelText('Nombre'), nombre)
+  if (precio) await userEvent.type(screen.getByLabelText('Precio'), precio)
+  if (stock) await userEvent.type(screen.getByLabelText('Stock'), stock)
+}
 
 describe('App', () => {
   beforeEach(() => {
@@ -31,6 +46,7 @@ describe('App', () => {
       data: { subscription: { unsubscribe: vi.fn() } },
     })
     select.mockResolvedValue({ data: [], error: null })
+    insert.mockResolvedValue({ error: null })
   })
 
   it('sin sesión muestra el formulario de inicio de sesión', async () => {
@@ -158,5 +174,59 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Inventario' }),
     ).toBeInTheDocument()
     expect(await screen.findByText('No hay productos todavía.')).toBeInTheDocument()
+  })
+
+  describe('formulario de nuevo producto', () => {
+    beforeEach(() => {
+      getSession.mockResolvedValue(sesionActiva)
+    })
+
+    it.each(['', '   '])(
+      'con nombre vacío o solo espacios (%j) muestra error y no guarda',
+      async (nombre) => {
+        render(<App />)
+        await screen.findByRole('heading', { name: 'Inventario' })
+
+        await rellenarProducto({ nombre, precio: '25', stock: '10' })
+        await userEvent.click(screen.getByRole('button', { name: 'Guardar producto' }))
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'El nombre es obligatorio',
+        )
+        expect(insert).not.toHaveBeenCalled()
+      },
+    )
+
+    it.each(['', '0', '-5'])(
+      'con precio vacío, 0 o negativo (%j) muestra error y no guarda',
+      async (precio) => {
+        render(<App />)
+        await screen.findByRole('heading', { name: 'Inventario' })
+
+        await rellenarProducto({ nombre: 'Camisa', precio, stock: '10' })
+        await userEvent.click(screen.getByRole('button', { name: 'Guardar producto' }))
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'El precio debe ser mayor que 0',
+        )
+        expect(insert).not.toHaveBeenCalled()
+      },
+    )
+
+    it.each(['', '-1', '1.5'])(
+      'con stock vacío, negativo o decimal (%j) muestra error y no guarda',
+      async (stock) => {
+        render(<App />)
+        await screen.findByRole('heading', { name: 'Inventario' })
+
+        await rellenarProducto({ nombre: 'Camisa', precio: '25', stock })
+        await userEvent.click(screen.getByRole('button', { name: 'Guardar producto' }))
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'El stock debe ser un entero mayor o igual a 0',
+        )
+        expect(insert).not.toHaveBeenCalled()
+      },
+    )
   })
 })

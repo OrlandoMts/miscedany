@@ -44,5 +44,5 @@ Se construye historia por historia desde `backlog.md`. Cuando haya nuevos comand
 ## Flujo de trabajo
 
 - `backlog.md` tiene el contexto y las historias. Se refinan una a una con `/story` y se implementan con `/pair` (skills en `.claude/skills/`).
-- `plan.md` tiene la historia en curso (el bloque aprobado por `/story`, que es la entrada de `/pair`). Es temporal: se reemplaza al pasar a la siguiente historia; no es documentación del proyecto.
+- Cada historia tiene un solo archivo de plan: `storybook/history-N.md` (el bloque aprobado por `/story`, que es la entrada de `/pair`). Al terminar la historia se le agrega un resumen al final. Reemplaza al antiguo `plan.md`.
 - Los detalles pendientes (qué pasa sin stock suficiente, devoluciones de turnos cerrados, cómo se reflejan en el cierre y en el dashboard) se deciden en `/story`, no por adelantado.
