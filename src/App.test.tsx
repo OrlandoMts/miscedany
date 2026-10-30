@@ -1,10 +1,11 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
-const { getSession, signInWithPassword, select } = vi.hoisted(() => ({
+const { getSession, onAuthStateChange, signInWithPassword, select } = vi.hoisted(() => ({
   getSession: vi.fn(),
+  onAuthStateChange: vi.fn(),
   signInWithPassword: vi.fn(),
   select: vi.fn(),
 }))
@@ -14,9 +15,7 @@ vi.mock('./supabaseClient', () => ({
     auth: {
       getSession,
       signInWithPassword,
-      onAuthStateChange: vi.fn().mockReturnValue({
-        data: { subscription: { unsubscribe: vi.fn() } },
-      }),
+      onAuthStateChange,
     },
     from: vi.fn().mockReturnValue({ select }),
   },
@@ -28,6 +27,9 @@ const sinSesion = { data: { session: null } }
 describe('App', () => {
   beforeEach(() => {
     getSession.mockResolvedValue(sinSesion)
+    onAuthStateChange.mockReturnValue({
+      data: { subscription: { unsubscribe: vi.fn() } },
+    })
     select.mockResolvedValue({ data: [], error: null })
   })
 
@@ -39,6 +41,31 @@ describe('App', () => {
     expect(
       screen.getByRole('button', { name: 'Iniciar sesión' }),
     ).toBeInTheDocument()
+  })
+
+  it('mientras carga la sesión no muestra el formulario', async () => {
+    getSession.mockReturnValue(new Promise(() => {}))
+
+    render(<App />)
+
+    expect(screen.queryByLabelText('Correo')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Inventario' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('si la sesión termina vuelve al formulario de inicio de sesión', async () => {
+    getSession.mockResolvedValue(sesionActiva)
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Inventario' })
+
+    const alCambiarSesion = onAuthStateChange.mock.calls[0][0]
+    act(() => alCambiarSesion('SIGNED_OUT', null))
+
+    expect(await screen.findByLabelText('Correo')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Inventario' }),
+    ).not.toBeInTheDocument()
   })
 
   it('sin sesión no muestra el inventario', async () => {

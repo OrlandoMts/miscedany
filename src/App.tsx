@@ -4,12 +4,21 @@ import { supabase } from './supabaseClient'
 
 export default function App() {
   const [hasSession, setHasSession] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setHasSession(!!data.session))
+    supabase.auth.getSession().then(({ data }) => {
+      setHasSession(!!data.session)
+      setIsLoading(false)
+    })
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) =>
+      setHasSession(!!session),
+    )
+    return () => data.subscription.unsubscribe()
   }, [])
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -19,6 +28,8 @@ export default function App() {
     else setHasSession(true)
   }
 
+  if (isLoading) return null
+
   if (hasSession) return <Inventory />
 
   return (
@@ -27,6 +38,8 @@ export default function App() {
         Correo
         <input
           type="email"
+          autoComplete="email"
+          required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
@@ -35,6 +48,8 @@ export default function App() {
         Contraseña
         <input
           type="password"
+          autoComplete="current-password"
+          required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />

@@ -6,12 +6,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aplicación web para registrar las ventas diarias y controlar el inventario de un negocio, con protección por roles (administrador y vendedor).
 
-Todavía no hay código ni arquitectura: se construye historia por historia desde `backlog.md`. Cuando existan comandos (instalar, levantar, tests) o decisiones de arquitectura, agrégalos aquí.
+Se construye historia por historia desde `backlog.md`. Cuando haya nuevos comandos o decisiones de arquitectura, agrégalos aquí.
 
 ## Stack
 
 - React + TypeScript (Vite)
 - Supabase: base de datos (PostgreSQL) y autenticación
+
+## Comandos
+
+- `npm run dev`: levanta la app (necesita `.env.local`, ver `.env.example`).
+- `npm test`: tests con Vitest + Testing Library (`vitest run`).
+- `npx tsc -b`: comprueba los tipos.
+
+## Convenciones
+
+- Los tests de UI prueban `<App />` y mockean `./supabaseClient`; no usan la red.
+- En la base de datos y el código, los identificadores van en inglés (`products`: `name`, `price`, `stock`). Los textos de la interfaz, en español.
+- Las migraciones están en `supabase/migrations/` y se ejecutan a mano en el SQL Editor de Supabase. Toda tabla lleva RLS activado.
 
 ## Decisiones costosas
 
