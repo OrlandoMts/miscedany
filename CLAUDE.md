@@ -21,7 +21,7 @@ Se construye historia por historia desde `backlog.md`. Cuando haya nuevos comand
 
 ## Convenciones
 
-- Los tests de UI prueban `<App />` y mockean `./supabaseClient`; no usan la red.
+- Los tests de UI prueban `<App />` y mockean `./supabaseClient`; no usan la red. El mock de `from()` expone `select` e `insert`, y los tests del formulario de producto usan los helpers `rellenarProducto` y `listaDeProductos` (en `src/App.test.tsx`).
 - En la base de datos y el código, los identificadores van en inglés (`products`: `name`, `price`, `stock`). Los textos de la interfaz, en español.
 - Las migraciones están en `supabase/migrations/` y se ejecutan a mano en el SQL Editor de Supabase. Toda tabla lleva RLS activado.
 
