@@ -14,6 +14,7 @@ Decisiones costosas: modelo de roles (administrador y vendedor). Sin multi-tiend
 3. Como administrador, quiero editar el precio y ajustar el stock de un producto, para mantener el inventario al día. Requires: #2
 4. Como administrador, quiero crear cuentas de vendedor, para que mi equipo pueda usar el sistema. Requires: #1
 5. Como vendedor, quiero iniciar sesión y consultar el stock disponible, para saber qué puedo vender. Requires: #4
+   - Como usuario, quiero un menú que me muestre solo las secciones de mi rol". Incluiría el router (React Router), un layout con menú y rutas protegidas
 6. Como administrador, quiero que los vendedores solo accedan a sus funciones (ventas, stock y cierre), para proteger el inventario y las cuentas de usuario. Requires: #4
 7. Como vendedor, quiero registrar una venta con uno o varios productos y sus cantidades, para que se calcule el total y se descuente el stock. Requires: #5
 8. Como vendedor, quiero ver mis ventas del día, para llevar el control de lo que he vendido. Requires: #7
