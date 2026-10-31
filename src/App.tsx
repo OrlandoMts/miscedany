@@ -1,5 +1,6 @@
 import { useEffect, useState, type SubmitEvent } from 'react'
 import Inventory from './Inventory'
+import Sellers from './Sellers'
 import { supabase } from './supabaseClient'
 
 export default function App() {
@@ -8,6 +9,7 @@ export default function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [hasError, setHasError] = useState(false)
+  const [screen, setScreen] = useState<'inventory' | 'sellers'>('inventory')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -30,7 +32,20 @@ export default function App() {
 
   if (isLoading) return null
 
-  if (hasSession) return <Inventory />
+  if (hasSession)
+    return (
+      <>
+        <nav>
+          <button type="button" onClick={() => setScreen('inventory')}>
+            Inventario
+          </button>
+          <button type="button" onClick={() => setScreen('sellers')}>
+            Vendedores
+          </button>
+        </nav>
+        {screen === 'inventory' ? <Inventory /> : <Sellers />}
+      </>
+    )
 
   return (
     <form onSubmit={handleSubmit}>
