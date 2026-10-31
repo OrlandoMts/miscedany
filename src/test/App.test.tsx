@@ -18,7 +18,7 @@ vi.mock('../supabaseClient', () => ({
       signInWithPassword,
       onAuthStateChange,
     },
-    from: vi.fn().mockReturnValue({ select, insert }),
+    from: vi.fn().mockReturnValue({ select: () => ({ order: select }), insert }),
   },
 }))
 

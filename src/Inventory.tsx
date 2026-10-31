@@ -8,6 +8,13 @@ type Product = {
   stock: number
 }
 
+function validatePriceAndStock(price: string, stock: string) {
+  if (!(Number(price) > 0)) return 'El precio debe ser mayor que 0'
+  if (stock === '' || !Number.isInteger(Number(stock)) || Number(stock) < 0)
+    return 'El stock debe ser un entero mayor o igual a 0'
+  return ''
+}
+
 export default function Inventory() {
   const [products, setProducts] = useState<Product[] | null>(null)
   const [name, setName] = useState('')
@@ -15,11 +22,16 @@ export default function Inventory() {
   const [stock, setStock] = useState('')
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editPrice, setEditPrice] = useState('')
+  const [editStock, setEditStock] = useState('')
+  const [editError, setEditError] = useState('')
 
   function loadProducts() {
     return supabase
       .from('products')
       .select('*')
+      .order('id')
       .then(({ data }) => setProducts(data ?? []))
   }
 
@@ -30,9 +42,8 @@ export default function Inventory() {
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!name.trim()) return setError('El nombre es obligatorio')
-    if (!(Number(price) > 0)) return setError('El precio debe ser mayor que 0')
-    if (stock === '' || !Number.isInteger(Number(stock)) || Number(stock) < 0)
-      return setError('El stock debe ser un entero mayor o igual a 0')
+    const invalid = validatePriceAndStock(price, stock)
+    if (invalid) return setError(invalid)
     setError('')
     setIsSaving(true)
     try {
@@ -46,6 +57,41 @@ export default function Inventory() {
       await loadProducts()
     } catch {
       setError('No se pudo guardar el producto')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleSaveEdit(id: number) {
+    const invalid = validatePriceAndStock(editPrice, editStock)
+    if (invalid) return setEditError(invalid)
+    setEditError('')
+    // Solo los campos que cambiaron: así no se pisa un stock modificado por otra venta.
+    const original = products?.find((product) => product.id === id)
+    const changes: { price?: number; stock?: number } = {}
+    if (Number(editPrice) !== original?.price) changes.price = Number(editPrice)
+    if (Number(editStock) !== original?.stock) changes.stock = Number(editStock)
+    if (Object.keys(changes).length === 0) return setEditingId(null)
+    setIsSaving(true)
+    try {
+      try {
+        // RLS no devuelve error al bloquear un update: simplemente no afecta ninguna fila.
+        const { data, error } = await supabase
+          .from('products')
+          .update(changes)
+          .eq('id', id)
+          .select('id')
+        if (error || !data?.length) return setEditError('No se pudo guardar el producto')
+      } catch {
+        return setEditError('No se pudo guardar el producto')
+      }
+      // El guardado ya funcionó: un fallo al recargar no debe verse como fallo al guardar.
+      try {
+        await loadProducts()
+      } catch {
+        // Se queda la lista anterior.
+      }
+      setEditingId(null)
     } finally {
       setIsSaving(false)
     }
@@ -88,14 +134,74 @@ export default function Inventory() {
               <th>Nombre</th>
               <th>Precio</th>
               <th>Stock</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {products.map((product) => (
               <tr key={product.id}>
                 <td>{product.name}</td>
-                <td>{product.price}</td>
-                <td>{product.stock}</td>
+                {editingId === product.id ? (
+                  <>
+                    <td>
+                      <input
+                        type="number"
+                        aria-label="Precio"
+                        value={editPrice}
+                        onChange={(e) => setEditPrice(e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        aria-label="Stock"
+                        value={editStock}
+                        onChange={(e) => setEditStock(e.target.value)}
+                      />
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td>{product.price}</td>
+                    <td>{product.stock}</td>
+                  </>
+                )}
+                <td>
+                  {editingId === product.id ? (
+                    <>
+                      {editError && <p role="alert">{editError}</p>}
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => handleSaveEdit(product.id)}
+                      >
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(null)
+                          setEditError('')
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => {
+                        setEditingId(product.id)
+                        setEditError('')
+                        setEditPrice(String(product.price))
+                        setEditStock(String(product.stock))
+                      }}
+                    >
+                      Editar
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

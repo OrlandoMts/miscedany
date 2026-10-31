@@ -21,7 +21,7 @@ Se construye historia por historia desde `backlog.md`. Cuando haya nuevos comand
 
 ## Convenciones
 
-- Los tests están en `src/test/`, un archivo por componente (`App.test.tsx`: sesión e inicio de sesión; `Inventory.test.tsx`: lista y formulario de producto). Mockean `../supabaseClient`; no usan la red. El mock de `from()` expone `select` e `insert`, y los tests del formulario de producto usan los helpers `rellenarProducto` y `listaDeProductos` (en `src/test/Inventory.test.tsx`).
+- Los tests están en `src/test/`, un archivo por componente (`App.test.tsx`: sesión e inicio de sesión; `Inventory.test.tsx`: lista, formulario y edición de producto). Mockean `../supabaseClient`; no usan la red. El mock de `from()` expone `select` (con `.order()`), `insert` y `update` (con `.eq()` y `.select()`); `select` y `eq` son la fuente de datos de cada test, y los tests del formulario de producto usan los helpers `rellenarProducto` y `listaDeProductos` (en `src/test/Inventory.test.tsx`).
 - En la base de datos y el código, los identificadores van en inglés (`products`: `name`, `price`, `stock`). Los textos de la interfaz, en español.
 - Las migraciones están en `supabase/migrations/` y se ejecutan a mano en el SQL Editor de Supabase. Toda tabla lleva RLS activado.
 

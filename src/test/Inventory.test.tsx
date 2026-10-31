@@ -1,16 +1,31 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Inventory from '../Inventory'
 
-const { select, insert } = vi.hoisted(() => ({
+const { select, order, insert, update, eq } = vi.hoisted(() => ({
   select: vi.fn(),
+  order: vi.fn(),
   insert: vi.fn(),
+  update: vi.fn(),
+  eq: vi.fn(),
 }))
 
 vi.mock('../supabaseClient', () => ({
   supabase: {
-    from: vi.fn().mockReturnValue({ select, insert }),
+    from: vi.fn().mockReturnValue({
+      // `select` es la fuente de datos de cada test; se puede esperar con o sin `.order()`.
+      select: (...args: unknown[]) => ({
+        order: (...orderArgs: unknown[]) => {
+          order(...orderArgs)
+          return select(...args)
+        },
+        then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+          select(...args).then(resolve, reject),
+      }),
+      insert,
+      update,
+    }),
   },
 }))
 
@@ -41,6 +56,18 @@ describe('Inventory', () => {
   beforeEach(() => {
     select.mockResolvedValue({ data: [], error: null })
     insert.mockResolvedValue({ error: null })
+    // `eq` es la fuente del resultado del update; se puede esperar con o sin `.select()`.
+    update.mockReturnValue({
+      eq: (...args: unknown[]) => {
+        const resultado = eq(...args)
+        return {
+          select: () => resultado,
+          then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+            resultado.then(resolve, reject),
+        }
+      },
+    })
+    eq.mockResolvedValue({ data: [{ id: 1 }], error: null })
   })
 
   it('con productos muestra nombre, precio y stock de cada uno', async () => {
@@ -71,6 +98,14 @@ describe('Inventory', () => {
       await screen.findByRole('heading', { name: 'Inventario' }),
     ).toBeInTheDocument()
     expect(await screen.findByText('No hay productos todavía.')).toBeInTheDocument()
+  })
+
+  it('pide la lista de productos ordenada por id', async () => {
+    render(<Inventory />)
+
+    await screen.findByText('No hay productos todavía.')
+
+    expect(order).toHaveBeenCalledWith('id')
   })
 
   describe('formulario de nuevo producto', () => {
@@ -285,6 +320,373 @@ describe('Inventory', () => {
       expect(screen.getByLabelText('Stock')).toHaveDisplayValue('')
 
       terminarCarga({ data: [], error: null })
+    })
+  })
+
+  describe('edición de producto', () => {
+    it('al pulsar Editar, precio y stock de la fila pasan a campos con los valores actuales', async () => {
+      select.mockResolvedValue({
+        data: [
+          { id: 1, name: 'Camisa', price: 25, stock: 10 },
+          { id: 2, name: 'Pantalón', price: 40, stock: 3 },
+        ],
+        error: null,
+      })
+      render(<Inventory />)
+
+      const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
+
+      expect(camisa.getByRole('spinbutton', { name: 'Precio' })).toHaveValue(25)
+      expect(camisa.getByRole('spinbutton', { name: 'Stock' })).toHaveValue(10)
+      const pantalon = within(screen.getByRole('row', { name: /Pantalón/ }))
+      expect(pantalon.queryByRole('spinbutton')).not.toBeInTheDocument()
+    })
+
+    it('al guardar con precio y stock nuevos, actualiza ese producto y muestra la lista recargada', async () => {
+      listaDeProductos(
+        [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+        [{ id: 1, name: 'Camisa', price: 30, stock: 7 }],
+      )
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+      const stock = fila.getByRole('spinbutton', { name: 'Stock' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '30')
+      await userEvent.clear(stock)
+      await userEvent.type(stock, '7')
+      await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+      expect(update).toHaveBeenCalledWith({ price: 30, stock: 7 })
+      expect(eq).toHaveBeenCalledWith('id', 1)
+      const recargada = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await waitFor(() =>
+        expect(recargada.queryByRole('spinbutton')).not.toBeInTheDocument(),
+      )
+      expect(recargada.getByRole('cell', { name: '30' })).toBeInTheDocument()
+      expect(recargada.getByRole('cell', { name: '7' })).toBeInTheDocument()
+    })
+
+    it('si solo cambia el precio, update recibe solo el precio y no pisa el stock', async () => {
+      select.mockResolvedValue({
+        data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+        error: null,
+      })
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '30')
+      await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(update).toHaveBeenCalledWith({ price: 30 }))
+    })
+
+    it('si solo cambia el stock, update recibe solo el stock y no pisa el precio', async () => {
+      select.mockResolvedValue({
+        data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+        error: null,
+      })
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      const stock = fila.getByRole('spinbutton', { name: 'Stock' })
+      await userEvent.clear(stock)
+      await userEvent.type(stock, '7')
+      await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(update).toHaveBeenCalledWith({ stock: 7 }))
+    })
+
+    it('si no cambia ningún campo, Guardar sale de edición sin actualizar el producto', async () => {
+      select.mockResolvedValue({
+        data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+        error: null,
+      })
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+      expect(fila.queryByRole('spinbutton')).not.toBeInTheDocument()
+      expect(fila.getByRole('cell', { name: '25' })).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('al pulsar Cancelar vuelve a la fila normal sin actualizar el producto', async () => {
+      select.mockResolvedValue({
+        data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+        error: null,
+      })
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '99')
+      await userEvent.click(fila.getByRole('button', { name: 'Cancelar' }))
+
+      expect(fila.queryByRole('spinbutton')).not.toBeInTheDocument()
+      expect(fila.getByRole('cell', { name: '25' })).toBeInTheDocument()
+      expect(fila.getByRole('cell', { name: '10' })).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('si el update funciona y la recarga de la lista falla, no dice que falló el guardado', async () => {
+      select
+        .mockResolvedValueOnce({
+          data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+          error: null,
+        })
+        .mockRejectedValue(new Error('red'))
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '30')
+      await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(select).toHaveBeenCalledTimes(2))
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('mientras guarda, deshabilita Guardar y los Editar, y un segundo clic no envía otro update', async () => {
+      select.mockResolvedValue({
+        data: [
+          { id: 1, name: 'Camisa', price: 25, stock: 10 },
+          { id: 2, name: 'Pantalón', price: 40, stock: 3 },
+        ],
+        error: null,
+      })
+      let terminar: (v: unknown) => void = () => {}
+      eq.mockReturnValue(new Promise((resolve) => (terminar = resolve)))
+      render(<Inventory />)
+
+      const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
+      const precio = camisa.getByRole('spinbutton', { name: 'Precio' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '30')
+      const guardar = camisa.getByRole('button', { name: 'Guardar' })
+      await userEvent.click(guardar)
+      await userEvent.click(guardar)
+
+      expect(guardar).toBeDisabled()
+      const pantalon = within(screen.getByRole('row', { name: /Pantalón/ }))
+      expect(pantalon.getByRole('button', { name: 'Editar' })).toBeDisabled()
+      expect(update).toHaveBeenCalledTimes(1)
+
+      await act(async () => terminar({ data: [{ id: 1 }], error: null }))
+      await waitFor(() =>
+        expect(
+          within(screen.getByRole('row', { name: /Pantalón/ })).getByRole('button', {
+            name: 'Editar',
+          }),
+        ).toBeEnabled(),
+      )
+    })
+
+    it('tras guardar, la fila sigue en edición hasta que llega la lista recargada', async () => {
+      let recargar: (v: unknown) => void = () => {}
+      select
+        .mockResolvedValueOnce({
+          data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+          error: null,
+        })
+        .mockReturnValueOnce(new Promise((resolve) => (recargar = resolve)))
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '30')
+      await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(select).toHaveBeenCalledTimes(2))
+      expect(fila.getByRole('spinbutton', { name: 'Precio' })).toBeInTheDocument()
+
+      await act(async () =>
+        recargar({
+          data: [{ id: 1, name: 'Camisa', price: 30, stock: 10 }],
+          error: null,
+        }),
+      )
+      const recargada = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await waitFor(() =>
+        expect(recargada.queryByRole('spinbutton')).not.toBeInTheDocument(),
+      )
+      expect(recargada.getByRole('cell', { name: '30' })).toBeInTheDocument()
+    })
+
+    it('el error de edición aparece dentro de la fila editada, no en el formulario', async () => {
+      select.mockResolvedValue({
+        data: [
+          { id: 1, name: 'Camisa', price: 25, stock: 10 },
+          { id: 2, name: 'Pantalón', price: 40, stock: 3 },
+        ],
+        error: null,
+      })
+      render(<Inventory />)
+
+      const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
+      const precio = camisa.getByRole('spinbutton', { name: 'Precio' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '0')
+      await userEvent.click(camisa.getByRole('button', { name: 'Guardar' }))
+
+      expect(await camisa.findByRole('alert')).toHaveTextContent(
+        'El precio debe ser mayor que 0',
+      )
+      const formulario = within(screen.getByRole('button', { name: 'Guardar producto' }).closest('form')!)
+      expect(formulario.queryByRole('alert')).not.toBeInTheDocument()
+      const pantalon = within(screen.getByRole('row', { name: /Pantalón/ }))
+      expect(pantalon.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it.each(['Cancelar', 'Editar otra fila'])(
+      'el error de edición se limpia al pulsar %s',
+      async (accion) => {
+        select.mockResolvedValue({
+          data: [
+            { id: 1, name: 'Camisa', price: 25, stock: 10 },
+            { id: 2, name: 'Pantalón', price: 40, stock: 3 },
+          ],
+          error: null,
+        })
+        render(<Inventory />)
+
+        const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
+        await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
+        const precio = camisa.getByRole('spinbutton', { name: 'Precio' })
+        await userEvent.clear(precio)
+        await userEvent.type(precio, '0')
+        await userEvent.click(camisa.getByRole('button', { name: 'Guardar' }))
+        expect(await camisa.findByRole('alert')).toBeInTheDocument()
+
+        if (accion === 'Cancelar') {
+          await userEvent.click(camisa.getByRole('button', { name: 'Cancelar' }))
+        } else {
+          const pantalon = within(screen.getByRole('row', { name: /Pantalón/ }))
+          await userEvent.click(pantalon.getByRole('button', { name: 'Editar' }))
+        }
+
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        if (accion === 'Cancelar') {
+          await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
+          expect(camisa.queryByRole('alert')).not.toBeInTheDocument()
+        }
+      },
+    )
+
+    it.each(['', '0', '-5'])(
+      'al editar con precio vacío, 0 o negativo (%j) muestra error y no actualiza',
+      async (valor) => {
+        select.mockResolvedValue({
+          data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+          error: null,
+        })
+        render(<Inventory />)
+
+        const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+        await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+        const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+        await userEvent.clear(precio)
+        if (valor) await userEvent.type(precio, valor)
+        await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'El precio debe ser mayor que 0',
+        )
+        expect(update).not.toHaveBeenCalled()
+        expect(fila.getByRole('spinbutton', { name: 'Precio' })).toBeInTheDocument()
+      },
+    )
+
+    it.each(['', '-1', '1.5'])(
+      'al editar con stock vacío, negativo o decimal (%j) muestra error y no actualiza',
+      async (valor) => {
+        select.mockResolvedValue({
+          data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+          error: null,
+        })
+        render(<Inventory />)
+
+        const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+        await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+        const stock = fila.getByRole('spinbutton', { name: 'Stock' })
+        await userEvent.clear(stock)
+        if (valor) await userEvent.type(stock, valor)
+        await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'El stock debe ser un entero mayor o igual a 0',
+        )
+        expect(update).not.toHaveBeenCalled()
+        expect(fila.getByRole('spinbutton', { name: 'Stock' })).toBeInTheDocument()
+      },
+    )
+
+    it.each([
+      ['devuelve error', () => eq.mockResolvedValue({ error: { message: 'rls' } })],
+      ['lanza una excepción', () => eq.mockRejectedValue(new Error('red'))],
+    ])(
+      'si update %s muestra el error y la fila sigue en edición',
+      async (_caso, fallar) => {
+        select.mockResolvedValue({
+          data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+          error: null,
+        })
+        fallar()
+        render(<Inventory />)
+
+        const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+        await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+        const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+        await userEvent.clear(precio)
+        await userEvent.type(precio, '30')
+        await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'No se pudo guardar el producto',
+        )
+        expect(fila.getByRole('spinbutton', { name: 'Precio' })).toHaveValue(30)
+      },
+    )
+
+    it('si update no afecta ninguna fila (por ejemplo, RLS) muestra el error y la fila sigue en edición', async () => {
+      select.mockResolvedValue({
+        data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+        error: null,
+      })
+      eq.mockResolvedValue({ data: [], error: null })
+      render(<Inventory />)
+
+      const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
+      await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
+      const precio = fila.getByRole('spinbutton', { name: 'Precio' })
+      await userEvent.clear(precio)
+      await userEvent.type(precio, '30')
+      await userEvent.click(fila.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'No se pudo guardar el producto',
+      )
+      expect(fila.getByRole('spinbutton', { name: 'Precio' })).toHaveValue(30)
     })
   })
 })
