@@ -22,12 +22,14 @@ Se construye historia por historia desde `backlog.md`. Cuando haya nuevos comand
 ## Convenciones
 
 - Los tests están en `src/test/`, un archivo por componente (`App.test.tsx`: sesión e inicio de sesión; `Inventory.test.tsx`: lista, formulario y edición de producto). Mockean `../supabaseClient`; no usan la red. El mock de `from()` expone `select` (con `.order()`), `insert` y `update` (con `.eq()` y `.select()`); `select` y `eq` son la fuente de datos de cada test, y los tests del formulario de producto usan los helpers `rellenarProducto` y `listaDeProductos` (en `src/test/Inventory.test.tsx`).
+- En `App.test.tsx` el mock de `from()` también cubre `profiles` con `select().eq().maybeSingle()`: `perfil` es la fuente del perfil de cada test y `perfilEq` registra por qué usuario se pregunta. Los tests de `Inventory` pasan el rol como prop (`role="admin"`, `"seller"` o `null`).
 - En la base de datos y el código, los identificadores van en inglés (`products`: `name`, `price`, `stock`). Los textos de la interfaz, en español.
 - Las migraciones están en `supabase/migrations/` y se ejecutan a mano en el SQL Editor de Supabase. Toda tabla lleva RLS activado.
 
 ## Decisiones costosas
 
 - Dos roles: administrador y vendedor.
+- El rol se lee de `profiles.role` en `App` (solo `'admin'` o `'seller'`; cualquier otro valor, o un fallo al leerlo, es `null`) y se pasa a `Inventory` como prop. La interfaz solo oculta controles: la protección real está en RLS y en la función `create-seller`. Sin rol no se muestra ningún control de administrador.
 - Un solo negocio con un único inventario (sin multi-tienda).
 - Siempre en línea (sin modo offline).
 - Un solo idioma (español) y una sola moneda.
@@ -46,3 +48,8 @@ Se construye historia por historia desde `backlog.md`. Cuando haya nuevos comand
 - `backlog.md` tiene el contexto y las historias. Se refinan una a una con `/story` y se implementan con `/pair` (skills en `.claude/skills/`).
 - Cada historia tiene un solo archivo de plan: `storybook/history-N.md` (el bloque aprobado por `/story`, que es la entrada de `/pair`). Al terminar la historia se le agrega un resumen al final. Reemplaza al antiguo `plan.md`.
 - Los detalles pendientes (qué pasa sin stock suficiente, devoluciones de turnos cerrados, cómo se reflejan en el cierre y en el dashboard) se deciden en `/story`, no por adelantado.
+
+## Git
+
+- No puedes crear commit ni hacer push/pull al repositorio remoto
+- La rama **master** solo será para hacer despliegues y la rama **develop** para desarrollo y pruebas

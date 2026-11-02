@@ -79,7 +79,7 @@ describe('Inventory', () => {
       error: null,
     })
 
-    render(<Inventory />)
+    render(<Inventory role="admin" />)
 
     const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
     expect(camisa.getByRole('cell', { name: '25' })).toBeInTheDocument()
@@ -90,9 +90,45 @@ describe('Inventory', () => {
     expect(screen.queryByText('No hay productos todavía.')).not.toBeInTheDocument()
   })
 
+  it('un vendedor ve la lista sin formulario, sin Editar y sin columna de acciones', async () => {
+    select.mockResolvedValue({
+      data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+      error: null,
+    })
+
+    render(<Inventory role="seller" />)
+
+    const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
+    expect(camisa.getAllByRole('cell')).toHaveLength(3)
+    expect(
+      screen.getAllByRole('columnheader').map((encabezado) => encabezado.textContent),
+    ).toEqual(['Nombre', 'Precio', 'Stock'])
+    expect(screen.queryByLabelText('Nombre')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Guardar producto' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
+  })
+
+  it('sin rol no se muestran el formulario, ni Editar, ni la columna de acciones', async () => {
+    select.mockResolvedValue({
+      data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
+      error: null,
+    })
+
+    render(<Inventory role={null} />)
+
+    const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
+    expect(camisa.getAllByRole('cell')).toHaveLength(3)
+    expect(
+      screen.getAllByRole('columnheader').map((encabezado) => encabezado.textContent),
+    ).toEqual(['Nombre', 'Precio', 'Stock'])
+    expect(screen.queryByLabelText('Nombre')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Guardar producto' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
+  })
+
   it('sin productos muestra el estado vacío del inventario', async () => {
 
-    render(<Inventory />)
+    render(<Inventory role="admin" />)
 
     expect(
       await screen.findByRole('heading', { name: 'Inventario' }),
@@ -101,7 +137,7 @@ describe('Inventory', () => {
   })
 
   it('pide la lista de productos ordenada por id', async () => {
-    render(<Inventory />)
+    render(<Inventory role="admin" />)
 
     await screen.findByText('No hay productos todavía.')
 
@@ -112,7 +148,7 @@ describe('Inventory', () => {
     it.each(['', '   '])(
       'con nombre vacío o solo espacios (%j) muestra error y no guarda',
       async (nombre) => {
-        render(<Inventory />)
+        render(<Inventory role="admin" />)
         await screen.findByRole('heading', { name: 'Inventario' })
 
         await rellenarProducto({ nombre, precio: '25', stock: '10' })
@@ -128,7 +164,7 @@ describe('Inventory', () => {
     it.each(['', '0', '-5'])(
       'con precio vacío, 0 o negativo (%j) muestra error y no guarda',
       async (precio) => {
-        render(<Inventory />)
+        render(<Inventory role="admin" />)
         await screen.findByRole('heading', { name: 'Inventario' })
 
         await rellenarProducto({ nombre: 'Camisa', precio, stock: '10' })
@@ -144,7 +180,7 @@ describe('Inventory', () => {
     it.each(['', '-1', '1.5'])(
       'con stock vacío, negativo o decimal (%j) muestra error y no guarda',
       async (stock) => {
-        render(<Inventory />)
+        render(<Inventory role="admin" />)
         await screen.findByRole('heading', { name: 'Inventario' })
 
         await rellenarProducto({ nombre: 'Camisa', precio: '25', stock })
@@ -158,7 +194,7 @@ describe('Inventory', () => {
     )
 
     it('con datos válidos guarda el producto con nombre, precio y stock', async () => {
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -168,7 +204,7 @@ describe('Inventory', () => {
     })
 
     it('guarda el nombre sin espacios al inicio ni al final', async () => {
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
 
       await rellenarProducto({ nombre: '  Camisa de lino  ', precio: '25', stock: '10' })
@@ -179,7 +215,7 @@ describe('Inventory', () => {
 
     it('tras guardar, el producto aparece en la lista', async () => {
       listaDeProductos([], [{ id: 1, name: 'Camisa', price: 25, stock: 10 }])
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByText('No hay productos todavía.')
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -193,7 +229,7 @@ describe('Inventory', () => {
     it('permite guardar un producto con un nombre que ya existe', async () => {
       const camisa = { id: 1, name: 'Camisa', price: 25, stock: 10 }
       listaDeProductos([camisa], [camisa, { id: 2, name: 'Camisa', price: 30, stock: 5 }])
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('row', { name: /Camisa/ })
 
       await rellenarProducto({ nombre: 'Camisa', precio: '30', stock: '5' })
@@ -207,7 +243,7 @@ describe('Inventory', () => {
 
     it('si el guardado falla muestra "No se pudo guardar el producto"', async () => {
       insert.mockResolvedValue({ error: { message: 'Failed to fetch' } })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -221,7 +257,7 @@ describe('Inventory', () => {
     it('si el guardado falla el producto no aparece en la lista', async () => {
       insert.mockResolvedValue({ error: { message: 'Failed to fetch' } })
       listaDeProductos([], [{ id: 1, name: 'Camisa', price: 25, stock: 10 }])
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByText('No hay productos todavía.')
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -233,7 +269,7 @@ describe('Inventory', () => {
     })
 
     it('tras guardar con éxito limpia los campos', async () => {
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -245,7 +281,7 @@ describe('Inventory', () => {
     })
 
     it('tras guardar con éxito no muestra el error anterior', async () => {
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
       await rellenarProducto({ nombre: 'Camisa', precio: '0', stock: '10' })
       await userEvent.click(screen.getByRole('button', { name: 'Guardar producto' }))
@@ -261,7 +297,7 @@ describe('Inventory', () => {
     it('mientras guarda deshabilita el botón', async () => {
       let terminarGuardado: (resultado: { error: null }) => void = () => {}
       insert.mockReturnValue(new Promise((resolve) => (terminarGuardado = resolve)))
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -277,7 +313,7 @@ describe('Inventory', () => {
 
     it('si el guardado falla conserva lo escrito y vuelve a habilitar el botón', async () => {
       insert.mockResolvedValue({ error: { message: 'Failed to fetch' } })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -292,7 +328,7 @@ describe('Inventory', () => {
 
     it('si el insert lanza una excepción muestra el mensaje y vuelve a habilitar el botón', async () => {
       insert.mockRejectedValue(new Error('Failed to fetch'))
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByRole('heading', { name: 'Inventario' })
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -309,7 +345,7 @@ describe('Inventory', () => {
       select
         .mockResolvedValueOnce({ data: [], error: null })
         .mockReturnValueOnce(new Promise((resolve) => (terminarCarga = resolve)))
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
       await screen.findByText('No hay productos todavía.')
 
       await rellenarProducto({ nombre: 'Camisa', precio: '25', stock: '10' })
@@ -332,7 +368,7 @@ describe('Inventory', () => {
         ],
         error: null,
       })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
@@ -348,7 +384,7 @@ describe('Inventory', () => {
         [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
         [{ id: 1, name: 'Camisa', price: 30, stock: 7 }],
       )
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -375,7 +411,7 @@ describe('Inventory', () => {
         data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
         error: null,
       })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -392,7 +428,7 @@ describe('Inventory', () => {
         data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
         error: null,
       })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -409,7 +445,7 @@ describe('Inventory', () => {
         data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
         error: null,
       })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -425,7 +461,7 @@ describe('Inventory', () => {
         data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
         error: null,
       })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -447,7 +483,7 @@ describe('Inventory', () => {
           error: null,
         })
         .mockRejectedValue(new Error('red'))
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -473,7 +509,7 @@ describe('Inventory', () => {
       })
       let terminar: (v: unknown) => void = () => {}
       eq.mockReturnValue(new Promise((resolve) => (terminar = resolve)))
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
@@ -507,7 +543,7 @@ describe('Inventory', () => {
           error: null,
         })
         .mockReturnValueOnce(new Promise((resolve) => (recargar = resolve)))
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -540,7 +576,7 @@ describe('Inventory', () => {
         ],
         error: null,
       })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
@@ -568,7 +604,7 @@ describe('Inventory', () => {
           ],
           error: null,
         })
-        render(<Inventory />)
+        render(<Inventory role="admin" />)
 
         const camisa = within(await screen.findByRole('row', { name: /Camisa/ }))
         await userEvent.click(camisa.getByRole('button', { name: 'Editar' }))
@@ -600,7 +636,7 @@ describe('Inventory', () => {
           data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
           error: null,
         })
-        render(<Inventory />)
+        render(<Inventory role="admin" />)
 
         const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
         await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -624,7 +660,7 @@ describe('Inventory', () => {
           data: [{ id: 1, name: 'Camisa', price: 25, stock: 10 }],
           error: null,
         })
-        render(<Inventory />)
+        render(<Inventory role="admin" />)
 
         const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
         await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -652,7 +688,7 @@ describe('Inventory', () => {
           error: null,
         })
         fallar()
-        render(<Inventory />)
+        render(<Inventory role="admin" />)
 
         const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
         await userEvent.click(fila.getByRole('button', { name: 'Editar' }))
@@ -674,7 +710,7 @@ describe('Inventory', () => {
         error: null,
       })
       eq.mockResolvedValue({ data: [], error: null })
-      render(<Inventory />)
+      render(<Inventory role="admin" />)
 
       const fila = within(await screen.findByRole('row', { name: /Camisa/ }))
       await userEvent.click(fila.getByRole('button', { name: 'Editar' }))

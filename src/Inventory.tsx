@@ -15,7 +15,10 @@ function validatePriceAndStock(price: string, stock: string) {
   return ''
 }
 
-export default function Inventory() {
+export type Role = 'admin' | 'seller'
+
+export default function Inventory({ role }: { role: Role | null }) {
+  const isAdmin = role === 'admin'
   const [products, setProducts] = useState<Product[] | null>(null)
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
@@ -100,32 +103,34 @@ export default function Inventory() {
   return (
     <main>
       <h1>Inventario</h1>
-      <form onSubmit={handleSubmit} noValidate>
-        <label>
-          Nombre
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label>
-          Precio
-          <input
-            type="number"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
-        </label>
-        <label>
-          Stock
-          <input
-            type="number"
-            value={stock}
-            onChange={(e) => setStock(e.target.value)}
-          />
-        </label>
-        <button type="submit" disabled={isSaving}>
-          Guardar producto
-        </button>
-        {error && <p role="alert">{error}</p>}
-      </form>
+      {isAdmin && (
+        <form onSubmit={handleSubmit} noValidate>
+          <label>
+            Nombre
+            <input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label>
+            Precio
+            <input
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </label>
+          <label>
+            Stock
+            <input
+              type="number"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={isSaving}>
+            Guardar producto
+          </button>
+          {error && <p role="alert">{error}</p>}
+        </form>
+      )}
       {products?.length === 0 && <p>No hay productos todavía.</p>}
       {products && products.length > 0 && (
         <table>
@@ -134,7 +139,7 @@ export default function Inventory() {
               <th>Nombre</th>
               <th>Precio</th>
               <th>Stock</th>
-              <th></th>
+              {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
@@ -166,42 +171,44 @@ export default function Inventory() {
                     <td>{product.stock}</td>
                   </>
                 )}
-                <td>
-                  {editingId === product.id ? (
-                    <>
-                      {editError && <p role="alert">{editError}</p>}
+                {isAdmin && (
+                  <td>
+                    {editingId === product.id ? (
+                      <>
+                        {editError && <p role="alert">{editError}</p>}
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => handleSaveEdit(product.id)}
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingId(null)
+                            setEditError('')
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    ) : (
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={() => handleSaveEdit(product.id)}
-                      >
-                        Guardar
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => {
-                          setEditingId(null)
+                          setEditingId(product.id)
                           setEditError('')
+                          setEditPrice(String(product.price))
+                          setEditStock(String(product.stock))
                         }}
                       >
-                        Cancelar
+                        Editar
                       </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => {
-                        setEditingId(product.id)
-                        setEditError('')
-                        setEditPrice(String(product.price))
-                        setEditStock(String(product.stock))
-                      }}
-                    >
-                      Editar
-                    </button>
-                  )}
-                </td>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
